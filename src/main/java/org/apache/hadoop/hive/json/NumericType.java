@@ -18,6 +18,10 @@
 
 package org.apache.hadoop.hive.json;
 
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+
 /**
  * A type that represents all of the numeric types: byte, short, int, long,
  * float, double, and decimal.
@@ -27,6 +31,8 @@ class NumericType extends HiveType {
   int intDigits;
   // the maximum number of digits after the decimal
   int scale;
+
+  public NumericType() {super(Kind.LONG);}
 
   NumericType(Kind kind, int intDigits, int scale) {
     super(kind);
@@ -85,5 +91,19 @@ class NumericType extends HiveType {
         kind = other.kind;
       }
     }
+  }
+
+  @Override
+  public void write(DataOutput dataOutput) throws IOException {
+    super.write(dataOutput);
+    dataOutput.writeInt(intDigits);
+    dataOutput.writeInt(scale);
+  }
+
+  @Override
+  public void readFields(DataInput dataInput) throws IOException {
+    super.readFields(dataInput);
+    this.intDigits = dataInput.readInt();
+    this.scale = dataInput.readInt();
   }
 }

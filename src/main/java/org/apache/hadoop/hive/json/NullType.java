@@ -18,6 +18,10 @@
 
 package org.apache.hadoop.hive.json;
 
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+
 /**
  * The type that only includes the null value.
  */

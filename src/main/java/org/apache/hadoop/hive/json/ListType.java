@@ -18,6 +18,9 @@
 
 package org.apache.hadoop.hive.json;
 
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 import java.io.PrintStream;
 
 /**
@@ -76,5 +79,20 @@ class ListType extends HiveType {
 
   public void printFlat(PrintStream out, String prefix) {
     elementType.printFlat(out, prefix + "._list");
+  }
+
+  @Override
+  public void write(DataOutput dataOutput) throws IOException {
+    super.write(dataOutput);
+    HiveTypeWrapper toWritable = new HiveTypeWrapper(elementType);
+    toWritable.write(dataOutput);
+  }
+
+  @Override
+  public void readFields(DataInput dataInput) throws IOException {
+    super.readFields(dataInput);
+    HiveTypeWrapper toPlain = new HiveTypeWrapper();
+    toPlain.readFields(dataInput);
+    elementType = toPlain.getInstance();
   }
 }

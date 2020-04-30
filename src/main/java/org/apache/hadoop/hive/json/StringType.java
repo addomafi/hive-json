@@ -18,6 +18,12 @@
 
 package org.apache.hadoop.hive.json;
 
+import org.apache.hadoop.io.WritableUtils;
+
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+
 /**
  * These are the types that correspond the the JSON string values: string,
  * binary, timestamp, and date.
@@ -26,6 +32,8 @@ class StringType extends HiveType {
   StringType(Kind kind) {
     super(kind);
   }
+
+  public StringType() {super(Kind.STRING);}
 
   @Override
   public String toString() {

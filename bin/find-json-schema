@@ -4,21 +4,28 @@ import os
 import sys
 
 gsonVersion = "2.6.2"
+hadoopCommonsVersion = "3.2.1"
 ourVersion = "1.0-SNAPSHOT"
 
 home = os.path.expanduser('~')
 gsonJar = os.path.abspath(os.path.join(home, ".m2", "repository", "com",
 	"google", "code", "gson", "gson", gsonVersion, 
 	"gson-%s.jar" % gsonVersion))
+hadoopCommonsJar = os.path.abspath(os.path.join(home, ".m2", "repository", "org",
+    "apache", "hadoop", "hadoop-common", hadoopCommonsVersion,
+    "hadoop-common-%s.jar" % hadoopCommonsVersion))
 ourJar = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..",
        "target", "hive-json-%s.jar" % ourVersion))
 
 if not os.path.exists(gsonJar):
   print >> sys.stderr, "Can't find %s. Please build." % gsonJar
   sys.exit(1)
+if not os.path.exists(hadoopCommonsJar):
+  print >> sys.stderr, "Can't find %s. Please build." % hadoopCommonsJar
+  sys.exit(1)
 if not os.path.exists(ourJar):
   print >> sys.stderr, "Can't find %s. Please build." % ourJar
   sys.exit(1)
 
-os.system("java -cp %s:%s org.apache.hadoop.hive.json.JsonSchemaFinder %s" % 
-		(gsonJar, ourJar, " ".join(sys.argv[1:])))
+os.system("java -cp %s:%s:%s org.apache.hadoop.hive.json.JsonSchemaFinder %s" %
+		(gsonJar, hadoopCommonsJar, ourJar, " ".join(sys.argv[1:])))

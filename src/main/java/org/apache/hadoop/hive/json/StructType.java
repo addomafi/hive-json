@@ -18,15 +18,22 @@
 
 package org.apache.hadoop.hive.json;
 
+import org.apache.hadoop.io.SortedMapWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.Writable;
+
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 import java.io.PrintStream;
+import java.util.Iterator;
 import java.util.Map;
-import java.util.TreeMap;
 
 /**
  * Model structs.
  */
 class StructType extends HiveType {
-  final Map<String, HiveType> fields = new TreeMap<String, HiveType>();
+  final SortedMapWritable<Text> fields = new SortedMapWritable<>();
 
   StructType() {
     super(Kind.STRUCT);
@@ -36,7 +43,7 @@ class StructType extends HiveType {
   public String toString() {
     StringBuilder buf = new StringBuilder("struct<");
     boolean first = true;
-    for (Map.Entry<String, HiveType> field : fields.entrySet()) {
+    for (Map.Entry<Text, Writable> field : fields.entrySet()) {
       if (!first) {
         buf.append(',');
       } else {
@@ -51,7 +58,7 @@ class StructType extends HiveType {
   }
 
   public StructType addField(String name, HiveType fieldType) {
-    fields.put(name, fieldType);
+    fields.put(new Text(name), fieldType);
     return this;
   }
 
@@ -63,7 +70,7 @@ class StructType extends HiveType {
   @Override
   public int hashCode() {
     int result = super.hashCode() * 3;
-    for (Map.Entry<String, HiveType> pair : fields.entrySet()) {
+    for (Map.Entry<Text, Writable> pair : fields.entrySet()) {
       result += pair.getKey().hashCode() * 17 + pair.getValue().hashCode();
     }
     return result;
@@ -78,17 +85,18 @@ class StructType extends HiveType {
   public void merge(HiveType other) {
     if (other.getClass() == StructType.class) {
       StructType otherStruct = (StructType) other;
-      for (Map.Entry<String, HiveType> pair : otherStruct.fields.entrySet()) {
-        HiveType ourField = fields.get(pair.getKey());
+      for (Map.Entry<Text, Writable> pair : otherStruct.fields.entrySet()) {
+        HiveType ourField = (HiveType) fields.get(pair.getKey());
+        HiveType value = (HiveType) pair.getValue();
         if (ourField == null) {
-          fields.put(pair.getKey(), pair.getValue());
-        } else if (ourField.subsumes(pair.getValue())) {
-          ourField.merge(pair.getValue());
-        } else if (pair.getValue().subsumes(ourField)) {
-          pair.getValue().merge(ourField);
-          fields.put(pair.getKey(), pair.getValue());
+          fields.put(pair.getKey(), value);
+        } else if (ourField.subsumes(value)) {
+          ourField.merge(value);
+        } else if (value.subsumes(ourField)) {
+          value.merge(ourField);
+          fields.put(pair.getKey(), value);
         } else {
-          fields.put(pair.getKey(), new UnionType(ourField, pair.getValue()));
+          fields.put(pair.getKey(), new UnionType(ourField, value));
         }
       }
     }
@@ -96,8 +104,35 @@ class StructType extends HiveType {
 
   public void printFlat(PrintStream out, String prefix) {
     prefix = prefix + ".";
-    for (Map.Entry<String, HiveType> field : fields.entrySet()) {
-      field.getValue().printFlat(out, prefix + field.getKey());
+    for (Map.Entry<Text, Writable> field : fields.entrySet()) {
+      ((HiveType) field.getValue()).printFlat(out, prefix + field.getKey());
+    }
+  }
+
+  @Override
+  public void write(DataOutput dataOutput) throws IOException {
+    super.write(dataOutput);
+    final SortedMapWritable<Text> toWritable = new SortedMapWritable<>();
+    Iterator<Text> it = this.fields.keySet().iterator();
+    while (it.hasNext()) {
+      Text key = it.next();
+      HiveType value = (HiveType) this.fields.get(key);
+      toWritable.put(key, new HiveTypeWrapper(value));
+    }
+    toWritable.write(dataOutput);
+  }
+
+  @Override
+  public void readFields(DataInput dataInput) throws IOException {
+    super.readFields(dataInput);
+    final SortedMapWritable<Text> toPlain = new SortedMapWritable<>();
+    toPlain.readFields(dataInput);
+
+    Iterator<Text> it = toPlain.keySet().iterator();
+    while (it.hasNext()) {
+      Text key = it.next();
+      HiveTypeWrapper value = (HiveTypeWrapper) toPlain.get(key);
+      this.fields.put(key, value.getInstance());
     }
   }
 }

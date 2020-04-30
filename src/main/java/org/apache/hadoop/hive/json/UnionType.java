@@ -18,6 +18,11 @@
 
 package org.apache.hadoop.hive.json;
 
+import org.apache.hadoop.io.ArrayWritable;
+
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -102,10 +107,33 @@ class UnionType extends HiveType {
   }
 
   public void printFlat(PrintStream out, String prefix) {
-    prefix = prefix + ".";
+    prefix = prefix + "._union.";
     int id = 0;
     for (HiveType child : children) {
       child.printFlat(out, prefix + (id++));
+    }
+  }
+
+  @Override
+  public void write(DataOutput dataOutput) throws IOException {
+    super.write(dataOutput);
+    ArrayWritable list = new ArrayWritable(HiveTypeWrapper.class);
+    HiveTypeWrapper[] toWritable = new HiveTypeWrapper[this.children.size()];
+    for (int i =0; i < this.children.size(); i++)
+      toWritable[i] = new HiveTypeWrapper(this.children.get(i));
+
+    list.set(toWritable);
+    list.write(dataOutput);
+  }
+
+  @Override
+  public void readFields(DataInput dataInput) throws IOException {
+    super.readFields(dataInput);
+    ArrayWritable list = new ArrayWritable(HiveTypeWrapper.class);
+    list.readFields(dataInput);
+
+    for (int i =0; i < list.get().length; i++) {
+      this.children.add(((HiveTypeWrapper) list.get()[i]).getInstance());
     }
   }
 }

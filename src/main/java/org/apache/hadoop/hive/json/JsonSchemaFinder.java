@@ -17,11 +17,9 @@
  */
 package org.apache.hadoop.hive.json;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
-import com.google.gson.JsonStreamParser;
+import com.google.gson.*;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.Writable;
 
 import java.io.FileInputStream;
 import java.io.FileReader;
@@ -47,11 +45,27 @@ public class JsonSchemaFinder {
           "(([ ][-+]?[0-9]{2}([:][0-9]{2})?)|Z)?[\"]?$");
   private static final Pattern DECIMAL_PATTERN =
       Pattern.compile("^-?(?<int>[0-9]+)([.](?<fraction>[0-9]+))?$");
+  private static final Pattern JSON_PATTERN = Pattern.compile("^(\\{|\\[).*(\\}|\\])$");
   private static final int INDENT = 2;
   private static final int MAX_DECIMAL_DIGITS = 38;
 
   static final BigInteger MIN_LONG = new BigInteger("-9223372036854775808");
   static final BigInteger MAX_LONG = new BigInteger("9223372036854775807");
+
+  private static HiveType pickTypeJsonObj(JsonElement json) {
+    if (json instanceof JsonArray) {
+      return pickType(json);
+    }
+
+    JsonObject obj = (JsonObject) json;
+    StructType result = new StructType();
+    for(Map.Entry<String,JsonElement> field: obj.entrySet()) {
+      String fieldName = field.getKey();
+      HiveType type = pickType(field.getValue());
+      result.fields.put(new Text(fieldName), type);
+    }
+    return result;
+  }
 
   static HiveType pickType(JsonElement json) {
     if (json.isJsonPrimitive()) {
@@ -100,6 +114,14 @@ public class JsonSchemaFinder {
           return new StringType(HiveType.Kind.TIMESTAMP);
         } else if (HEX_PATTERN.matcher(str).matches()) {
           return new StringType(HiveType.Kind.BINARY);
+        } else if (JSON_PATTERN.matcher(str).matches()) {
+          // Firstly parse to JSON
+          try {
+            JsonElement parsedJson = (new JsonParser()).parse(str);
+            return pickTypeJsonObj(parsedJson);
+          } catch (Exception e) {
+            return new StringType(HiveType.Kind.STRING);
+          }
         } else {
           return new StringType(HiveType.Kind.STRING);
         }
@@ -122,14 +144,7 @@ public class JsonSchemaFinder {
       }
       return result;
     } else {
-      JsonObject obj = (JsonObject) json;
-      StructType result = new StructType();
-      for(Map.Entry<String,JsonElement> field: obj.entrySet()) {
-        String fieldName = field.getKey();
-        HiveType type = pickType(field.getValue());
-        result.fields.put(fieldName, type);
-      }
-      return result;
+      return pickTypeJsonObj(json);
     }
   }
 
@@ -160,7 +175,7 @@ public class JsonSchemaFinder {
         case STRUCT:
           out.println("struct <");
           boolean first = true;
-          for(Map.Entry<String, HiveType> field:
+          for(Map.Entry<Text, Writable> field:
               ((StructType) type).fields.entrySet()) {
             if (!first) {
               out.println(",");
@@ -172,7 +187,7 @@ public class JsonSchemaFinder {
             }
             out.print(field.getKey());
             out.print(": ");
-            printType(out, field.getValue(), margin + INDENT);
+            printType(out, (HiveType) field.getValue(), margin + INDENT);
           }
           out.print(">");
           break;
@@ -203,7 +218,7 @@ public class JsonSchemaFinder {
   static void printTopType(PrintStream out, StructType type) {
     out.println("create table tbl (");
     boolean first = true;
-    for(Map.Entry<String, HiveType> field: type.fields.entrySet()) {
+    for(Map.Entry<Text, Writable> field: type.fields.entrySet()) {
       if (!first) {
         out.println(",");
       } else {
@@ -214,7 +229,7 @@ public class JsonSchemaFinder {
       }
       out.print(field.getKey());
       out.print(" ");
-      printType(out, field.getValue(), 2 * INDENT);
+      printType(out, (HiveType) field.getValue(), 2 * INDENT);
     }
     out.println();
     out.println(")");

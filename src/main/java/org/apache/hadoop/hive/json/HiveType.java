@@ -18,13 +18,19 @@
 
 package org.apache.hadoop.hive.json;
 
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.WritableUtils;
+
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 import java.io.PrintStream;
 
 /**
  * The internal representation of what we have discovered about a given
  * field's type.
  */
-abstract class HiveType {
+abstract class HiveType implements Writable {
   enum Kind {
     NULL(0),
     BOOLEAN(1),
@@ -47,6 +53,8 @@ abstract class HiveType {
   }
 
   protected Kind kind;
+
+  HiveType() {}
 
   HiveType(Kind kind) {
     this.kind = kind;
@@ -87,5 +95,15 @@ abstract class HiveType {
    */
   public void printFlat(PrintStream out, String prefix) {
     out.println(prefix + ": " + toString());
+  }
+
+  @Override
+  public void write(DataOutput dataOutput) throws IOException {
+    WritableUtils.writeEnum(dataOutput, kind);
+  }
+
+  @Override
+  public void readFields(DataInput dataInput) throws IOException {
+    this.kind = WritableUtils.readEnum(dataInput, Kind.class);
   }
 }
