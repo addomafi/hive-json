@@ -17,7 +17,9 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 public class DataSchemaDiscovery extends Configured implements Tool {
 
@@ -29,12 +31,33 @@ public class DataSchemaDiscovery extends Configured implements Tool {
 
         public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
             JsonObject snapshot = (JsonObject) (new JsonParser()).parse(value.toString());
-            JsonArray entities = snapshot.getAsJsonArray("entities");
-            Iterator<JsonElement> it = entities.iterator();
-            while (it.hasNext()) {
-                JsonObject entity = (JsonObject) it.next();
-                context.write(new Text(entity.get("entity_name").getAsString()), new HiveTypeWrapper(JsonSchemaFinder.pickType(entity)));
+
+            String paramSkipEntities = context.getConfiguration().get("skipEntities");
+            if (!"ALL".equals(paramSkipEntities)) {
+                List<String> skipEntities = new ArrayList<>();
+                if (paramSkipEntities != null && !paramSkipEntities.isEmpty()) {
+                    String[] val = paramSkipEntities.split(",");
+                    for (int i = 0; i< val.length; i++) {
+                        skipEntities.add(val[i]);
+                    }
+                }
+
+                JsonArray entities = snapshot.getAsJsonArray("entities");
+                Iterator<JsonElement> it = entities.iterator();
+                while (it.hasNext()) {
+                    JsonObject entity = (JsonObject) it.next();
+                    String entityName = entity.get("entity_name").getAsString();
+                    // Add only if necessary
+                    if (!skipEntities.contains(entityName)) {
+                        context.write(new Text(entity.get("entity_name").getAsString()), new HiveTypeWrapper(JsonSchemaFinder.pickType(entity)));
+                    }
+                }
             }
+
+            // Remove entities node and discovery all schema
+            snapshot.remove("entities");
+            // Process the entire JSON
+            context.write(new Text("snapshot"), new HiveTypeWrapper(JsonSchemaFinder.pickType(snapshot)));
         }
     }
 
@@ -59,6 +82,7 @@ public class DataSchemaDiscovery extends Configured implements Tool {
     @Override
     public int run(String[] args) throws Exception {
         Configuration conf = new Configuration();
+        conf.set("skipEntities", args[1]);
         Job job = Job.getInstance(conf, "Data schema discovery");
         job.setJarByClass(DataSchemaDiscovery.class);
         job.setMapperClass(DataSchemaDiscoveryMapper.class);
@@ -67,8 +91,10 @@ public class DataSchemaDiscovery extends Configured implements Tool {
         job.setOutputFormatClass(HiveTypeOutputFormat.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(HiveTypeWrapper.class);
-        FileInputFormat.addInputPath(job, new Path(args[0]));
-        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+        FileOutputFormat.setOutputPath(job, new Path(args[0]));
+        for (int i = 2; i < args.length; ++i) {
+            FileInputFormat.addInputPath(job, new Path(args[i]));
+        }
         boolean result = job.waitForCompletion(true);
         System.out.println(result);
         return (result ? 0 : 1);

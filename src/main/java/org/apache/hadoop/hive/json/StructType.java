@@ -103,7 +103,12 @@ class StructType extends HiveType {
   }
 
   public void printFlat(PrintStream out, String prefix) {
-    prefix = prefix + ".";
+    if (prefix.indexOf(".") > -1 || prefix.indexOf(";") > -1) {
+      prefix = prefix + ".";
+    } else {
+      prefix = prefix + ";";
+    }
+
     for (Map.Entry<Text, Writable> field : fields.entrySet()) {
       ((HiveType) field.getValue()).printFlat(out, prefix + field.getKey());
     }

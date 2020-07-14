@@ -39,9 +39,11 @@ public class TestDataSchemaDiscovery {
 
     @Test
     public void testEntityDiscovery() throws Exception {
-        String args[] = new String[2];
-        args[0] = INPUT;
-        args[1] = OUTPUT;
+        String args[] = new String[4];
+        args[0] = OUTPUT;
+        args[1] = "vector_wallet_sender,vector_sender_withdrawals";
+        args[2] = INPUT;
+        args[3] = INPUT;
 
         DataSchemaDiscovery wm = new DataSchemaDiscovery();
         ToolRunner.run(new Configuration(), wm, args);
